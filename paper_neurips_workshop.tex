@@ -1,0 +1,1015 @@
+% ================================================================
+% NeurIPS 2026 Workshop submission
+% Workshop on the Evaluation of LLMs as Judges (JUDGe)
+%
+% "Do LLM-Judge Biases Compose? A Label-Free Test for the
+%  Position x Verbosity Interaction"
+%
+% One idea: judge-bias corrections are chained assuming additivity;
+% we give a gold-free test (SSIT) for whether that holds, a
+% robustness analysis of its identifying assumption, a partial
+% label-free correction (IASC), and a small real-judge pilot.
+% Every quantitative magnitude that is not a proposition is
+% simulation-based and flagged as such.
+%
+% Style: official neurips_2026.sty, double-blind workshop track.
+%   pdflatex paper_neurips_workshop.tex  -> anonymous submission (line numbers)
+%   pdflatex paper_zenodo.tex            -> attributed preprint (for Zenodo)
+% ================================================================
+
+\documentclass{article}
+
+% zenodobuild is set to 1 by paper_zenodo.tex before this file is \input;
+% it selects the attributed preprint style option below and the \author block.
+\providecommand{\zenodobuild}{0}
+
+\PassOptionsToPackage{numbers,compress}{natbib}
+\ifnum\zenodobuild=1
+  \usepackage[dblblindworkshop,preprint]{neurips_2026}
+\else
+  \usepackage[dblblindworkshop]{neurips_2026}
+\fi
+\workshoptitle{Workshop on the Evaluation of LLMs as Judges (JUDGe)}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs,multirow,array}
+\usepackage{graphicx}
+\usepackage[dvipsnames,table]{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\usepackage{microtype}
+\emergencystretch=2em
+\hbadness=2500
+
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{remark}{Remark}
+
+\newcommand{\BP}{\mathcal{B}_P}
+\newcommand{\BV}{\mathcal{B}_V}
+\newcommand{\BS}{\mathcal{B}_S}
+\newcommand{\logit}{\mathrm{logit}}
+\newcommand{\Ncal}{N_{\mathrm{cal}}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\IAPPI}{\textsc{ia-ppi}}
+
+% ================================================================
+\begin{document}
+\sloppy
+
+\title{Do LLM-Judge Biases Compose?\\
+A Label-Free Test for the Position$\times$Verbosity Interaction}
+
+% In the anonymous submission build the style prints "Anonymous Author(s)"
+% and ignores \author. The attributed (Zenodo) build uses it.
+\author{%
+  Johan S Varughese\\
+  \texttt{mail2joshvarkey@gmail.com}%
+}
+
+\maketitle
+
+% ================================================================
+\begin{abstract}
+Whether an LLM judge yields a valid evaluation depends not only on
+its accuracy but on how its error profile composes with the
+debiasing pipeline around it and the decisions its scores feed
+downstream. We study one such composition: pipelines
+correct position and verbosity bias \emph{sequentially}, assuming
+the two add. We show this assumption is (a) consequential, (b)
+checkable without human labels, and (c) currently unchecked.
+\textbf{Consequential:} if position and verbosity bias interact
+($\beta_{PV}\neq0$), a pipeline that judges each pair once and
+\emph{subtracts} a fitted position term leaves a residual of
+$\tfrac12|\beta_{PV}|$ that no ordering removes; \emph{averaging}
+over both orders removes it on the log-odds scale (up to a Jensen
+gap)---so which deployed designs are exposed is nameable, and a
+residual of this size shifts leaderboard order and a measurable
+fraction of RLHF preference labels. \textbf{Checkable:} the
+\textbf{Swap-Symmetry Interaction Test} (SSIT) is a
+difference-in-differences over the four position$\times$verbosity
+swap cells; its readout $\hat\imath_{PV}$ is a difference of four
+cell means, estimating the population interaction in win-rate points
+with \emph{no human labels and no model of the judge}. It needs a
+dedicated collection (${\approx}8\times$ one evaluation's cost) but
+no preference labels. We give a power analysis, decision procedure,
+and deployment-disclosure checklist. For $1\times$-budget
+pipelines with no labels, \textbf{Interaction-Aware Swap Correction}
+(IASC) shrinks each position-coupled bias term toward zero---a
+floor, not a fix. \textbf{Unchecked:} a pilot on seven open judges
+over six families ($\approx$20 pairs each, no labels) finds
+$\hat\imath_{PV}>0$ on six ($+0.07$ to $+0.17$; wild cluster
+bootstrap $p\!\leq\!0.03$), AIA-significant on four; the seventh
+picks the stronger response on every pair, so SSIT correctly returns
+$0$ (the ``too-easy stimulus'' regime). For four re-collected
+judges, a length-only \emph{padding} manipulation keeps the pooled
+interaction (at half the magnitude) but splits by judge---growing
+for one, holding for two, vanishing for one whose $P{\times}V$ was
+really position$\times$style---so a paraphrase probe alone can
+mislead about the mechanism. Code, data, and a valid-CI (PPI)
+variant released.
+\end{abstract}
+
+% ================================================================
+\section{Introduction}
+\label{sec:intro}
+
+LLM-as-a-judge evaluation~\cite{zheng2023judging,gu2024survey}
+supplies reward signals for RLHF~\cite{sharma2023sycophancy} and
+determines leaderboard rankings~\cite{dubois2024length}. Three
+systematic biases are well documented---positional ($\BP$),
+verbosity ($\BV$), self-preference ($\BS$)---each with a published
+mitigation~\cite{zheng2023judging,dubois2024length,panickssery2024llm}.
+Deployed pipelines apply them one after another: swap positions and
+average, then length-control, then diversify the panel.
+
+\textbf{The gap.} No prior work asks whether this chaining is
+\emph{valid}---whether the biases compose additively---since the
+natural check, measuring the interaction against human preference
+labels, defeats the purpose of an automatic judge. The validity
+question is not ``how accurate is the judge'' but ``how does its
+error compose with the pipeline'': a judge can be well-calibrated in
+isolation yet leave a systematic residual once its corrections are
+chained. This paper treats that check when there are no labels:
+(1) \textbf{Which pipelines are exposed} (\S\ref{sec:theory},
+Prop.~\ref{prop:residual}, Cor.~\ref{cor:composite})---the answer to
+a standing question, \emph{does position-swap averaging fully
+debias pairwise evaluation?} Only on the log-odds scale: a
+$1\times$ subtract-a-term pipeline still leaves
+$\tfrac12|\beta_{PV}|$; a $2\times$ swap-average cancels it there
+but not on non-position pairs ($V{\times}S$, \dots); joint
+estimation is exact. (2) \textbf{Downstream cost}
+(\S\ref{sec:downstream}): an uncorrected interaction of the
+magnitude our worked example suggests reorders adjacent leaderboard
+models and mislabels an estimable fraction of length-mismatched
+RLHF comparisons. (3) \textbf{The check} (SSIT, \S\ref{sec:ssit},
+Prop.~\ref{prop:ssit}): a difference-in-differences over the four
+$P{\times}V$ swap cells, \emph{design-based}---no human labels, no
+model of how the judge decides, robust across six decision rules
+(\S\ref{sec:ssit-robust})---at a dedicated collection cost of
+${\approx}8\times$ one evaluation, with a power analysis for sizing
+it (\S\ref{sec:power}). (4) \textbf{A $1\times$-budget correction}
+(IASC, \S\ref{sec:iasc}, Prop.~\ref{prop:iasc}): shrinks each
+position-coupled bias term toward zero without labels; a floor, not
+a fix. (5) \textbf{A seven-judge pilot, a decision procedure, and a
+deployment-disclosure checklist}
+(\S\ref{sec:pilot}--\ref{sec:discussion}): $\hat\imath_{PV}>0$ on
+six of seven open judges across six families, correctly null on the
+seventh; a length-only re-test of four judges shows the interaction
+persists pooled but its mechanism (length vs.\ paraphrase-style) is
+judge-specific.
+A valid-CI version via prediction-powered
+inference~\cite{ppi_ranking2026,eif_judge2026} is in
+Appendix~\ref{app:iappi-est}; self-preference and other factor pairs
+use the same contrast (Appendix~\ref{app:pairs}).
+
+\textbf{Scope.} The only non-simulation numbers are the propositions
+and the pilot (\S\ref{sec:pilot}), which demonstrates the
+diagnostic, not judge behaviour. Simulations use \emph{stipulated}
+interaction magnitudes to check estimator recovery and power and to
+bound downstream cost, not to size the effect for real
+judges---that is what the pre-registered study
+(\S\ref{sec:discussion}) is for.
+
+% ================================================================
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Single biases, measured in isolation.} Position, verbosity,
+and self-preference bias each have a published
+mitigation~\cite{zheng2023judging,wang2023fair,shi2024position,saito2023verbosity,dubois2024length,panickssery2024llm,selfpref2024};
+taxonomies and audits~\cite{ye2024justice,gu2024survey,li2024generation,thakur2024judging}
+keep the one-bias-at-a-time convention. Length-controlled
+AlpacaEval~\cite{dubois2024length} removes verbosity as a
+\emph{marginal} confounder by regression---the regime
+Prop.~\ref{prop:residual} targets.
+
+\textbf{Multi-bias measurement.} The closest empirical
+work~\cite{mitigation2026} evaluates nine debiasing strategies over
+five judges and four bias types: \emph{style} bias (markdown vs.\
+plain prose) dominates---up to $0.76$---position bias
+\emph{in isolation} is small ($\leq0.04$), and verbosity bias
+sign-flips by family (concise-preferring for Claude,
+length-preferring for the rest), which our pilot reproduces. It
+measures each bias against human labels on a fixed panel but does
+not ask whether corrections \emph{compose}---a small main effect can
+still carry a consequential interaction, and our worked example
+measures $P\times$(paraphrase), overlapping that dominant style
+axis~\cite{wu2023style}. Our contribution is orthogonal: a
+\emph{label-free} test run \emph{per judge} at deployment scale,
+where gold labels are missing. Per-instance
+detectors~\cite{biasdetector2025} act on several biases at once but
+give no population-level guarantee.
+
+\textbf{Prediction-powered inference for evaluation.}
+PPI/PPI++~\cite{angelopoulos2023ppi,angelopoulos2024ppipp} combines
+a small gold set with a large model-labelled set for valid CIs;
+\cite{ppi_ranking2026} brings this to LLM-based ranking, and
+\cite{eif_judge2026} relates PPI-style estimators to the efficient
+influence function and when they beat measurement-error corrections.
+All learn a rectifier $\mu(\hat Y)$ of the judge score
+alone---Prop.~\ref{prop:coverage} shows this is insufficient under
+interaction-induced cell heterogeneity, and a factorial rectifier
+$\mu(\hat Y,P,V,PV)$ restores validity (Appendix~\ref{app:iappi-est}).
+
+% ================================================================
+\section{Sequential Correction Leaves a Residual}
+\label{sec:theory}
+
+Model the judge's choice as logistic in binary bias
+indicators---position $P$, verbosity $V$, self-preference $S$---and
+a quality term:
+\begin{equation}
+  \logit P(Y{=}A) = \gamma(Q) + \beta_P P + \beta_V V + \beta_S S
+  + \beta_{PV}PV + \beta_{PS}PS + \beta_{VS}VS + \beta_{PVS}PVS .
+  \label{eq:full}
+\end{equation}
+Sequential correction (SC) assumes \emph{additive independence}
+(AIA): all interaction terms are zero. It is a two-stage pipeline:
+estimate $\hat\beta_P$ by marginal regression of $Y$ on $P$ and
+subtract $\hat\beta_P P$; then estimate $\hat\beta_V$ from
+position-matched data (in swap pipelines, the reference stratum
+$P{=}0$) and subtract $\hat\beta_V V$.
+
+\begin{proposition}[SC residual under interaction]
+\label{prop:residual}
+Under~\eqref{eq:full} restricted to $P,V$, balanced
+($P{\perp}V$, $\Pr{=}\tfrac12$), $\beta_{PV}\neq0$:
+$\hat\beta_P^{\mathrm{marg}}\xrightarrow{p}\beta_P+\tfrac12\beta_{PV}$
+(omitted-variable bias), $\hat\beta_V\xrightarrow{p}\beta_V$, and
+after both corrections the $(P{=}1,V{=}1)$ cell retains a residual
+log-odds
+$\Delta_{\mathrm{SC}}=(\beta_P{+}\beta_V{+}\beta_{PV})
+-(\beta_P{+}\tfrac12\beta_{PV})-\beta_V=\tfrac12\beta_{PV}$.
+Any symmetric variant of the pipeline leaves an uncorrected term of
+order $\tfrac12|\beta_{PV}|$ somewhere in the $2{\times}2$ table.
+\end{proposition}
+
+\begin{corollary}[Does swap-averaging fully debias? Which pipelines are exposed]
+\label{cor:composite}
+The residual depends on \emph{how} position bias is removed.
+(i) \textbf{Subtract-a-fitted-term} ($1\times$ judging, then remove
+$\hat\beta_P P$ from the score, AlpacaEval-style regression
+debiasing): exposed, residual $\tfrac12\beta_{PV}$.
+(ii) \textbf{Swap-average} (judge both orders, average the score):
+the $(2P{-}1)$-odd terms---$\beta_P$ \emph{and}
+$\beta_{PV}(2P{-}1)V$---cancel \emph{in the log-odds}. Pipelines
+average the probability/score, and
+$\tfrac12[\sigma(x){+}\sigma(y)]\neq\sigma(\tfrac12(x{+}y))$, so a
+second-order Jensen term of size $O(\beta_{PV}\cdot|\delta{+}\beta_V V|)$
+survives; it is small when the two orders have similar baseline
+rates and $0$ at $\beta_{PV}{=}0$. V$\times$S and other non-position
+pairs are untouched by swap-averaging.
+(iii) \textbf{Joint estimation} ($P{+}V{+}PV$ regression): exact.
+Case (i) needs SSIT to decide whether to act; case (ii) needs it for
+the non-position pairs and, if the baseline-rate gap is large, for
+P$\times$V too.
+\end{corollary}
+
+\noindent The algebra is textbook omitted-variable
+bias~\cite{angrist2009}; the contribution is pinning \emph{which}
+pipelines this exposes---swap-averaging debiases $P{\times}V$ on the
+log-odds scale but not the surface-form/self-preference pairs, and
+subtract-a-term pipelines not at all. Whether it bites for your
+judge still requires measuring $\beta_{PV}$---\S\ref{sec:ssit}.
+
+% ================================================================
+\section{Downstream: What an Uncorrected Interaction Costs}
+\label{sec:downstream}
+
+Write $\imath_{PV}$ for the interaction on the \emph{win-rate}
+scale---the probability-scale image of $\beta_{PV}$
+(\S\ref{sec:theory}), the quantity a debiased pipeline should drive
+to zero. An uncorrected $\imath_{PV}$ biases the measured win rate on
+length-mismatched comparisons by up to $\imath_{PV}$ points, flowing
+into whatever those win rates feed
+(\texttt{sim\_ranking\_impact.py}). We take
+$\imath_{PV}{=}0.15$---within our pilot's $+0.07$--$+0.17$ range
+(\S\ref{sec:pilot})---as a running figure.
+
+\textbf{Leaderboards.} In a constructed six-model leaderboard
+(adjacent true win rate ${\approx}51\%$), a judge carrying
+$\imath_{PV}{=}0.15$ inverts the ranking under no correction and
+under sequential correction alike (Kendall $\tau{=}+0.20$; worst
+model above best), since the differential lives entirely in
+$\beta_{PV}$. Log-odds swap-averaging and joint estimation restore
+$\tau{=}1.0$; label-free IASC recovers $\tau{=}0.87$. The
+construction is adversarial, so the absolute drop is an upper
+bound, but the ordering of \emph{corrections} is stable across a
+$4\times$ sweep of the bias magnitude (Appendix~\ref{app:ranksweep}).
+
+\textbf{Preference data.} On the affected cell the judge's
+pick-target probability is shifted by up to $\imath_{PV}$ relative
+to the quality-only preference: if quality preferences cluster near
+$50/50$ this sets the labelled winner by the interaction rather than
+quality for $26$--$44\%$ of that cell at $\imath_{PV}{=}0.15$
+($9$--$26\%$ at $\imath_{PV}{=}0.05$--$0.15$); halve those rates for
+a corpus with a length gap on only a fraction $f$ of comparisons.
+These labels compound into model weights through
+RLHF/DPO~\cite{sharma2023sycophancy}---and, because verbose
+responses are favoured on the very cell where position bias is
+cancelled, in a direction that rewards verbosity.
+
+% ================================================================
+\section{A Label-Free Test for the Interaction}
+\label{sec:ssit}
+
+Run every pair through all four $(P,V)$ swap cells. Swapping the two
+responses maps $P\!\to\!1{-}P$ and (pick-target)$\to$(pick-other),
+so the judge's dependence on position must be \emph{odd} in $P$:
+write it $\beta_P(2P{-}1)$, with the interaction $\beta_{PV}(2P{-}1)V$.
+The pooled log-odds of picking the target is then
+\begin{equation}
+  \logit\pi_1(P,V)=\delta+\beta_P(2P{-}1)+\beta_V V
+    +\beta_{PV}(2P{-}1)V,
+  \label{eq:swapmodel}
+\end{equation}
+$\pi_1{=}\Pr(\text{pick target})$, $\delta$ the unknown per-pair
+quality gap.
+
+\begin{proposition}[Swap-symmetry identity]
+\label{prop:ssit}
+The difference-in-differences of the four cell log-odds,
+$\Delta_{\mathrm{SS}}=
+[\logit\pi_1(1,1)-\logit\pi_1(0,1)]
+-[\logit\pi_1(1,0)-\logit\pi_1(0,0)]$,
+equals $2\beta_{PV}$ and does not depend on $\delta$, $\beta_P$, or
+$\beta_V$ (Appendix~\ref{app:ssit}).
+\end{proposition}
+
+We call the plug-in the \textbf{Swap-Symmetry Interaction Test}
+(SSIT), with two readouts and it matters which you trust: (a)
+$\hat\imath_{PV}$, the \textbf{same DiD on the probability
+scale}---a difference of the four within-pair cell means,
+$[\bar r_{11}-\bar r_{01}]-[\bar r_{10}-\bar r_{00}]$,
+\emph{design-based}, estimating the population interaction in
+win-rate points under \emph{any} judge decision rule (no link,
+additivity, or homogeneity needed; \eqref{eq:swapmodel} plays no
+role); and (b) $\hat\beta_{PV}$, the log-odds coefficient from the
+saturated 8-cell fit, which \emph{does} use \eqref{eq:swapmodel} and
+attenuates over heterogeneous $\delta$---report it only as a rough
+secondary number, with $\geq3$ samples/cell. No gold labels enter
+either (a small gold set only adds a CI on the debiased win rate
+itself, Appendix~\ref{app:iappi-est}); the same contrast on other
+factor pairs gives $\imath_{PS},\imath_{VS}$.
+
+\textbf{Cost.} SSIT is label-free but not free: each calibration pair
+is judged in all four $(P,V)$ cells at $\geq2$ samples
+($\approx$8$\times$ the cost of scoring it once) plus a verbosity
+manipulation a debiasing pipeline does not otherwise produce---a
+dedicated experiment on a calibration subset, cheaper than human
+preferences but not a free rider on the two-order swap debiasing
+already runs, and needing no preference labels.
+
+\subsection{What does $\hat\imath_{PV}$ actually assume?}
+\label{sec:ssit-robust}
+
+Almost nothing. We plant a judge, compute its \emph{true} population
+$\imath_{PV}$ by high-$N$ Monte Carlo, and check whether SSIT
+recovers it from $60$-pair panels with no labels, across six
+decision rules---one \emph{out of family}: heavy-tailed
+(Student-$t$) quality perception, a hard confidence threshold, no
+link function at all.
+
+\begin{table}[htbp]
+\centering
+\caption{SSIT's $\hat\imath_{PV}$ vs.\ the judge's \emph{true}
+population $\imath_{PV}$, no gold labels, $60$ pairs $\times$ $300$
+panels (``bias'' $=$ mean $\hat\imath_{PV}$ minus truth). The ``bias
+fades'' row's smaller true $\imath_{PV}$ reflects a genuinely
+unbiased judge on easy pairs, not attenuation.}
+\label{tab:ssit_robust}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Judge decision rule & true $\imath_{PV}$ & SSIT $\hat\imath_{PV}$ & bias & $\Pr(\hat\imath_{PV}{>}0)$ \\
+\midrule
+additive logistic (SSIT's own model)        & $+0.24$ & $+0.24\,(\pm0.08)$ & $-0.00$ & $1.00$ \\
+logistic, wide quality-gap spread           & $+0.20$ & $+0.20\,(\pm0.07)$ & $-0.00$ & $1.00$ \\
+bias slopes vary with quality, symmetric    & $+0.22$ & $+0.22\,(\pm0.08)$ & $+0.00$ & $1.00$ \\
+bias fades when target clearly better       & $+0.16$ & $+0.16\,(\pm0.08)$ & $-0.00$ & $0.98$ \\
+probit link (SSIT assumes logit)            & $+0.33$ & $+0.33\,(\pm0.07)$ & $-0.00$ & $1.00$ \\
+\textbf{out of family}: $t$-noise + threshold, no link & $+0.23$ & $+0.23\,(\pm0.07)$ & $-0.00$ & $0.99$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Bias $\leq 0.004$ everywhere, including the linkless
+judge, because $\hat\imath_{PV}$ is a difference of four sample means
+and estimates its population counterpart whatever the judge does;
+\eqref{eq:swapmodel} only buys the log-odds interpretation. It
+relies only on \emph{design}: the same pairs in all four cells,
+judged independently (the pre-registered protocol randomises cell
+order to protect this)---so $\hat\imath_{PV}$ is the average
+win-rate distortion over the pair population tested, not the
+mechanism or any other pair mix.
+
+\subsection{How large a check do you need?}
+\label{sec:power}
+
+$\hat\imath_{PV}=\bar d=\tfrac1n\sum_k d_k$ is a sample mean of the
+per-pair DiDs $d_k$, so by the CLT
+$\bar d\approx\mathcal N(\imath_{PV},\sigma_d^2/n)$ with
+$\sigma_d^2=\mathrm{Var}(d_k)$, and the two-sided level-$\alpha$
+wild-cluster test has power
+
+\vspace{-0.6em}
+\begin{equation}
+  \mathrm{power}\ \approx\
+  \Phi\!\Bigl(\tfrac{|\imath_{PV}|\sqrt n}{\sigma_d}-z_{1-\alpha/2}\Bigr),
+  \qquad
+  n_{80\%}\ \approx\ \frac{7.8\,\sigma_d^2}{\imath_{PV}^2}.
+  \label{eq:power}
+\end{equation}
+
+\noindent This is \emph{a priori}: it needs only $\sigma_d$ (a
+between-pair term plus a sampling term $\propto 1/s$), pinned from a
+$\leq10$-pair pre-run or borrowed from a similar judge. A decisive
+judge ($\sigma_d\approx0.25$, \S\ref{sec:pilot}) needs $n\gtrsim22$
+for a $0.15$ effect; mid-range ($\sigma_d\approx0.4$) needs
+$n\gtrsim55$. Table~\ref{tab:power}'s wild-bootstrap simulation
+tracks \eqref{eq:power}, mildly conservative below $n{=}30$ (it
+estimates $\sigma_d$ rather than knowing it).
+
+\begin{table}[htbp]
+\centering
+\caption{Power of the SSIT wild-cluster test ($5\%$), $2$
+samples/cell, mid-range judge (cell rate $\approx0.8$), $500$
+panels. Near-deterministic judges reach these rows at smaller $n$;
+$1$ sample/cell roughly halves each entry.}
+\label{tab:power}
+\small
+\begin{tabular}{lcccc}
+\toprule
+true $\imath_{PV}$ & $20$ pairs & $30$ pairs & $50$ pairs & $100$ pairs \\
+\midrule
+$0.05$ & $0.08$ & $0.11$ & $0.11$ & $0.16$ \\
+$0.10$ & $0.14$ & $0.20$ & $0.26$ & $0.47$ \\
+$0.15$ & $0.25$ & $0.35$ & $0.52$ & $0.76$ \\
+$0.20$ & $0.38$ & $0.54$ & $0.75$ & $0.95$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent \textbf{Rule of thumb}: budget
+$n\approx 8\,(\sigma_d/\imath_{PV})^2$ pairs at $\geq2$
+samples/cell (\eqref{eq:power}); after running, substitute the
+observed $\mathrm{SD}(d_k)$ (realized-power column of
+Table~\ref{tab:pilot}).
+
+% ================================================================
+\section{IASC: A Partial Label-Free Correction}
+\label{sec:iasc}
+
+The swap contrasts that identify $\beta_{PV}$ also identify
+$\beta_P$ (and $\beta_{PS},\beta_{PVS}$ with a third factor)---every
+coefficient whose monomial carries $(2P{-}1)$, the
+\emph{position-coupled subspace}. Reading these off a
+swap-augmented calibration subset and subtracting them gives
+\textbf{Interaction-Aware Swap Correction}:
+\begin{equation}
+  \hat s_i = \sigma\!\bigl(\logit\hat Y_i
+    - \hat\beta_P(2P_i{-}1) - \hat\beta_{PV}(2P_i{-}1)V_i\bigr).
+  \label{eq:iasc}
+\end{equation}
+
+\begin{proposition}[IASC shrinks each position-coupled term]
+\label{prop:iasc}
+Fitting a common slope across pairs with heterogeneous $\delta_k$
+attenuates each swap-cell coefficient,
+$\hat\beta_P\xrightarrow{p}\lambda_P\beta_P$ and
+$\hat\beta_{PV}\xrightarrow{p}\lambda_{PV}\beta_{PV}$ with
+$\lambda_P,\lambda_{PV}\in(0,1]$ increasing to $1$ as
+$\mathrm{Var}(\delta_k)\to0$ (Appendix~\ref{app:ssit}). Then
+\eqref{eq:iasc} gives $\E[\logit\hat s_i\mid k]=\delta_k
++(1{-}\lambda_P)\beta_P(2P_i{-}1)+\beta_V V_i+\beta_S S_i
++(1{-}\lambda_{PV})\beta_{PV}(2P_i{-}1)V_i$: a positive fraction of
+each position-coupled term is removed, sign preserved, and
+$\beta_V,\beta_S$ untouched.
+\end{proposition}
+
+\noindent Two honest caveats. (i) $\lambda_P$ and $\lambda_{PV}$
+need not be equal, so a cell can retain oppositely-signed
+main-effect and interaction residuals. (ii) The guarantee is on the
+\emph{log-odds}; after $\sigma(\cdot)$ the corrected rate need not
+lie between raw and swap-averaged---on the pilot it moves
+$0.93\to0.98$ past the $2\times$ swap-average of $0.95$
+(Table~\ref{tab:iasc}), a Jensen overshoot, so IASC is a heuristic
+floor, not a guaranteed win-rate improvement.
+
+\noindent\textbf{When to use it.} IASC fits one situation: judge
+each pair \emph{once}, no gold labels, wanting back part of what
+$2\times$ swap-averaging would remove---it removes $\approx60$--$80\%$
+of each position-coupled log-odds term on quality-matched pairs,
+less otherwise (Table~\ref{tab:ssit_robust}), for one extra swapped
+pass. With a gold set, use the factorial-rectifier estimator instead
+(Appendix~\ref{app:coverage}).
+
+% ================================================================
+\section{Pilot: Seven Judges, Six Families}
+\label{sec:results}
+\label{sec:pilot}
+
+We ran SSIT gold-free on seven open judges spanning six model
+families---\texttt{gpt-oss}-20B/120B (Groq), \texttt{gemma}
+(Google AI Studio), \texttt{qwen3-27b} (Groq \texttt{qwen/qwen3.8-27b}),
+\texttt{allam-2-7b} (Groq), \texttt{mistral-small}, \texttt{command-r}
+(Cohere)---$\approx$20 pairs each, $1$--$2$ samples/cell
+(Table~\ref{tab:pilot}). $n{\approx}20$ is below what \S\ref{sec:power}
+recommends for a mid-range judge, and $V$ is a paraphrase (below), so
+we read this as a multi-judge feasibility test, not a magnitude
+estimate.
+
+\begin{table}[htbp]
+\centering
+\caption{SSIT on seven judges, $\approx$20 pairs/judge.
+$\hat\imath_{PV}$: probability-scale swap-cell DiD; wild CI/$p$:
+wild cluster bootstrap (Rademacher, $B{=}9{,}999$); rlz.\ pow.:
+realized power from observed $\mathrm{SD}(d_k)$; AIA: both
+$\hat\imath_{PV}$ and $\hat\beta_{PV}$ CIs exclude 0.}
+\label{tab:pilot}
+\small
+\begin{tabular}{llcccccc}
+\toprule
+Judge & family & $\hat\imath_{PV}$ & wild 95\% CI & wild $p$ & rlz.\ pow. & AIA & $\hat b_V$ \\
+\midrule
+\texttt{gpt-oss-20b}  & openai  & $+0.12$ & $[+0.01,+0.21]$ & $0.026$ & $0.64$ & yes & $+0.5$ \\
+\texttt{gpt-oss-120b} & openai  & $+0.17$ & $[+0.04,+0.30]$ & $0.009$ & $0.69$ & yes & $+1.5$ \\
+\texttt{gemma}        & google  & $+0.16$ & $[+0.07,+0.26]$ & $0.0001$ & $0.91$ & yes & $-1.4$ \\
+\texttt{qwen3-27b}    & qwen    & $+0.12$ & $[+0.05,+0.20]$ & $0.0008$ & $0.86$ & yes & $+0.8$ \\
+\texttt{allam-2-7b}   & allam   & $+0.09$ & $[+0.01,+0.17]$ & $0.034$ & $0.61$ & no  & $+0.8$ \\
+\texttt{mistral-small}& mistral & $+0.07$ & $[+0.01,+0.14]$ & $0.032$ & $0.48$ & no  & $+1.4$ \\
+\texttt{command-r}    & cohere  & $+0.00$ & $[+0.00,+0.00]$ & $1.0$   & ---    & no  & $+0.0$ \\
+\midrule
+Pooled ($7$)             & --- & $+0.10$ & $[+0.05,+0.14]$ & ${\approx}0$ & $0.98$ & yes & --- \\
+Pooled (excl.\ \texttt{command-r}) & --- & $\mathbf{+0.12}$ & $\mathbf{[+0.06,+0.17]}$ & $\mathbf{{\approx}0}$ & --- & yes & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Six of seven show it; the seventh is unchallenged.}
+$\hat\imath_{PV}$ is positive on every judge except \texttt{command-r}
+($+0.07$ to $+0.17$), AIA-significant on four judges across three
+families (\texttt{gpt-oss}-20B/120B, \texttt{gemma},
+\texttt{qwen3-27b}; wild $p\leq0.026$, both bootstrap CIs excluding
+0), and
+positive-but-marginal on \texttt{mistral-small} and
+\texttt{allam-2-7b} (wild $p\approx0.033$, CI touching 0; neither
+survives Bonferroni). The detecting judges have
+$\mathrm{SD}(d_k)\approx0.2$--$0.3$, affording $60$--$90\%$ power at
+$n{\approx}20$ for a $0.15$ effect via \eqref{eq:power}---expected
+detections, not luck.
+\texttt{command-r} picks the stronger response on all $20$ pairs, so
+$\hat\imath_{PV}{=}0$ exactly---not because it is unbiased but
+because our $r_2$ responses are visibly weaker, the regime where
+Table~\ref{tab:ssit_robust}'s ``bias fades when the target is
+clearly better'' row applies and where SSIT correctly returns null.
+It is why the pre-registered design uses quality-matched pairs. The
+$\hat b_V$ sign flip persists (concise-preferring \texttt{gemma}
+vs.\ length-preferring rest), so the interaction is not one model's
+length taste.
+
+\textbf{A length-only probe separates position$\times$length from
+position$\times$style.} Our default $V$ rewrites $r_1$ into a longer
+form, so it entangles length with rephrasing---and
+\cite{mitigation2026} reports that \emph{style} bias, not position
+bias, dominates. We re-collect four judges with a \emph{padding-only}
+$V$ that keeps $r_1$ verbatim and appends redundant restatement of
+points already made (\texttt{make\_padded\_v.py}), so $V$ toggles
+length alone. Pooled, the interaction persists
+($\hat\imath_{PV}{=}{+}0.06$ excl.\ \texttt{command-r}, wild
+$p{=}0.003$), about half the paraphrase-$V$ magnitude---but the
+mechanism is judge-specific: \texttt{mistral-small} \emph{grows}
+($+0.075\!\to\!+0.10$, wild $p{=}0.003$), \texttt{allam-2-7b} holds
+marginally ($+0.09\!\to\!+0.075$, $p{=}0.07$), \texttt{command-r}
+stays $0$, and \texttt{qwen3-27b}'s interaction \emph{vanishes}
+($+0.12$, $p{=}0.0008\to-0.02$, CI $[-0.18,+0.15]$, $p{=}0.85$): for
+that judge the paraphrase-driven component carried $P{\times}V$ and
+the length-only signal is null (with the higher verdict-drop caveat
+of Appendix~\ref{app:validation})---so paraphrase and padding-only
+$V$ can give opposite answers for the same judge, which is why the
+pre-registered protocol (Appendix~\ref{app:prereg}) mandates
+length-only $V$.
+
+\textbf{What it does not establish.} An effect size for a deployed
+judge: $n{\approx}20$, no frontier judge, padding-only re-test on
+four of seven. \cite{mitigation2026}'s $\leq0.04$ position bias is
+the \emph{main effect}; ours is the interaction, which
+\S\ref{sec:theory}'s residual argument says a sequential pipeline
+leaves behind regardless of mechanism. Self-preference and
+$V{\times}S$ (Appendix~\ref{app:pairs}) are weaker and, for $S$,
+confounded; $\approx$15\% of \texttt{gemma} verdicts are dropped
+(Appendix~\ref{app:validation}).
+
+% ================================================================
+\section{Discussion}
+\label{sec:discussion}
+\label{sec:limitations}
+
+The additivity assumption behind chained bias correction is now
+cheap to check and cheap to act on. We close with the operational
+version.
+
+\textbf{Decision procedure.} For an evaluation that reports a
+sequentially position-corrected win rate: (1) if the pipeline
+\emph{swap-averages} the log-odds and the two orders have similar
+baseline rates, $P{\times}V$ is handled (Cor.~\ref{cor:composite});
+run SSIT only for the non-position pairs. (2) Else, run SSIT per
+judge on enough pairs for $\geq\!80\%$ power at your smallest effect
+of concern (Table~\ref{tab:power}: $\approx$50--100 at $2$
+samples/cell for a $0.15$ effect, fewer for a decisive judge);
+report $\hat\imath_{PV}$ with a wild-cluster CI \emph{and} the
+realized power from the observed $\mathrm{SD}(d_k)$. (3) CI excludes
+$0\Rightarrow$ act (step 4); CI contains $0$ \emph{and} realized
+power $\geq\!0.8\Rightarrow$ sequential correction is defensible for
+effects above your threshold; CI contains $0$ \emph{and} power
+$<\!0.8\Rightarrow$ \textbf{inconclusive}: collect more
+pairs/samples, do not treat as a pass. (4) Act: switch to log-odds
+swap-averaging or joint $P{+}V{+}PV$ estimation; if stuck at
+$1\times$ with a gold set, use the factorial-rectifier estimator
+(Appendix~\ref{app:coverage}); if $1\times$ and no labels, apply
+IASC as a floor.
+
+\textbf{Deployment-disclosure checklist.} A judge gating training or
+ranking decisions should ship an evaluation-pipeline
+disclosure---a model-card analog---and $P{\times}V$ is one line of
+it. Disclose: (1) how position bias is removed (subtractive /
+log-odds-averaged / joint); (2) $\hat\imath_{PV}$, and the relevant
+non-position pairs, with a wild-cluster CI and realized power; (3)
+whether the verbosity probe was length-only or paraphrase; (4) what
+the scores feed upstream/downstream---the same four questions a
+\emph{reviewer} should ask. This checklist is deliberately silent on
+training-data provenance and human-validation agreement: SSIT's
+value is precisely that it needs neither, but a full disclosure
+should still report them separately when available.
+
+\textbf{Pre-registered full study} (Appendix~\ref{app:prereg}):
+$\geq\!8$ judges, $\geq\!5$ families \emph{including frontier
+judges}, adequately powered, padding-only $V$.
+
+\textbf{Limitations.} Every magnitude outside the propositions and
+pilot $\hat\imath_{PV}$ is simulation-based, not measured; the
+pilot's scope limits ($n{\approx}20$, no frontier judge, a
+four-judge padding check, and \texttt{command-r}'s null reflecting
+an easy stimulus rather than an unbiased judge) are noted in
+\S\ref{sec:pilot}. IASC and
+\IAPPI\ are post-hoc, post-registration additions (\IAPPI\ is
+post-stratified PPI); SSIT's contribution is label-free, per-judge
+swap symmetry, plus the exposure taxonomy, power analysis, and
+decision procedure, not the estimator.
+
+% ================================================================
+\section*{Reproducibility Statement and Broader Impact}
+
+Seed \texttt{2024} throughout, released (\texttt{numpy}/\texttt{scipy}
+only): \texttt{ssit.py}, \texttt{iasc.py}, \texttt{ia\_ppi.py}
+(\IAPPI), \texttt{sim\_prop2\_coverage.py},
+\texttt{sim\_ssit\_robustness.py}/\texttt{sim\_ssit\_power.py}
+(Tables~\ref{tab:ssit_robust}--\ref{tab:power}),
+\texttt{sim\_ranking\_impact.py} (\S\ref{sec:downstream}),
+\texttt{analyze\_real.py}/%
+\texttt{analyze\_iasc.py}/\texttt{analyze\_iappi.py}
+(Tables~\ref{tab:pilot}--\ref{tab:iasc}), and
+\texttt{collect\_free.py}. Pre-registration and code:
+\url{https://github.com/[REDACTED]}, \url{https://osf.io/[REDACTED]}.
+
+\textbf{Broader impact.} Bias correction shapes model rankings and RLHF reward labels, so
+both under- and over-correction matter; the factorial rectifier with
+$\Ncal{<}500$ can \emph{worsen} bias---and our simulated magnitudes
+should not be cited as properties of any named model.
+
+% ================================================================
+\bibliographystyle{plain}
+\begin{thebibliography}{99}
+
+\bibitem{zheng2023judging}
+L.~Zheng et al., ``Judging LLM-as-a-judge with MT-Bench and Chatbot
+Arena,'' in \emph{NeurIPS}, 2023.
+
+\bibitem{gu2024survey}
+J.~Gu et al., ``A survey on LLM-as-a-judge,'' arXiv:2411.15594, 2024.
+
+\bibitem{li2024generation}
+D.~Li et al., ``From generation to judgment: Opportunities and
+challenges of LLM-as-a-judge,'' arXiv:2411.16594, 2024.
+
+\bibitem{shi2024position}
+L.~Shi et al., ``Judging the judges: A systematic study of position
+bias in LLM-as-a-judge,'' in \emph{IJCNLP-AACL}, 2025.
+arXiv:2406.07791.
+
+\bibitem{wang2023fair}
+P.~Wang et al., ``Large language models are not fair evaluators,''
+in \emph{ACL}, 2024. arXiv:2305.17926.
+
+\bibitem{saito2023verbosity}
+K.~Saito et al., ``Verbosity bias in preference labeling by large
+language models,'' arXiv:2310.10076, 2023.
+
+\bibitem{panickssery2024llm}
+A.~Panickssery et al., ``LLM evaluators recognize and favor their
+own generations,'' arXiv:2404.13076, 2024.
+
+\bibitem{selfpref2024}
+X.~Wu et al., ``Self-preference bias in LLM-as-a-judge,''
+arXiv:2410.21819, 2024.
+
+\bibitem{dubois2024length}
+Y.~Dubois et al., ``Length-controlled AlpacaEval: A simple way to
+debias automatic evaluators,'' arXiv:2404.04475, 2024.
+
+\bibitem{ye2024justice}
+J.~Ye et al., ``Justice or prejudice? Quantifying biases in
+LLM-as-a-judge,'' arXiv:2410.02736, 2024.
+
+\bibitem{thakur2024judging}
+A.~S.~Thakur et al., ``Judging the judges: Evaluating alignment and
+vulnerabilities in LLMs-as-judges,'' arXiv:2406.12624, 2024.
+
+\bibitem{mitigation2026}
+S.~K.~Soumik, ``Judging the judges: A systematic evaluation of bias
+mitigation strategies in LLM-as-a-judge pipelines,'' \emph{Trans.\
+Mach.\ Learn.\ Res.}, 2026. arXiv:2604.23178.
+
+\bibitem{biasdetector2025}
+``Any large language model can be a reliable judge: Debiasing with a
+reasoning-based bias detector,'' arXiv:2505.17100, 2025.
+
+\bibitem{koo2023benchmarking}
+R.~Koo et al., ``Benchmarking cognitive biases in large language
+models as evaluators,'' arXiv:2309.17012, 2023.
+
+\bibitem{sharma2023sycophancy}
+M.~Sharma et al., ``Towards understanding sycophancy in language
+models,'' arXiv:2310.13548, 2023.
+
+\bibitem{wu2023style}
+M.~Wu and A.~F.~Aji, ``Style over substance: Evaluation biases for
+large language models,'' arXiv:2307.03025, 2023.
+
+\bibitem{angelopoulos2023ppi}
+A.~N.~Angelopoulos et al., ``Prediction-powered inference,''
+\emph{Science}, vol.~382, pp.~669--674, 2023.
+
+\bibitem{angelopoulos2024ppipp}
+A.~N.~Angelopoulos, J.~C.~Duchi, and T.~Zrnic, ``PPI++: Efficient
+prediction-powered inference,'' arXiv:2311.01453, 2023.
+
+\bibitem{ppi_ranking2026}
+A.~Divekar, ``Statistically reliable LLM-based ranking evaluation
+via prediction-powered inference,'' in \emph{ACL 2026 GEM
+Workshop}. arXiv:2606.05308.
+
+\bibitem{eif_judge2026}
+Y.~T.~Chen, S.~Lu, S.~Li, M.~Guo, and S.~Li, ``Efficient inference
+for noisy LLM-as-a-judge evaluation,'' arXiv:2601.05420, 2026.
+
+\bibitem{brant1990}
+R.~Brant, ``Assessing proportionality in the proportional odds
+model,'' \emph{Biometrics}, vol.~46, pp.~1171--1178, 1990.
+
+\bibitem{angrist2009}
+J.~D.~Angrist and J.-S.~Pischke, \emph{Mostly Harmless
+Econometrics}. Princeton Univ.\ Press, 2009.
+
+\bibitem{guo2017calibration}
+C.~Guo et al., ``On calibration of modern neural networks,'' in
+\emph{ICML}, 2017.
+
+\end{thebibliography}
+
+% ================================================================
+\appendix
+
+\section{Detection Protocol}
+\label{app:prereg}
+The interaction-detection endpoint and its decision rule were fixed
+in advance of the pilot: primary endpoint $\hat\imath_{PV}$ (the
+probability-scale swap-cell DiD) per judge and pooled; decision rule
+``$\hat\imath_{PV}$ 95\% CI excludes 0 and
+$|\hat\imath_{PV}|>0.02\Rightarrow$ sequential correction
+inadequate.'' SSIT is the estimator for that endpoint.
+
+\noindent\textbf{Target design for the full study.}
+\begin{itemize}\itemsep1pt
+\item $\geq 8$ judges over $\geq 5$ model families, \emph{including}
+  frontier deployed judges (GPT-4-class, Claude, Gemini) alongside
+  open models.
+\item Stimuli quality-matched by an independent rater
+  ($|\Delta\text{quality}|<0.1$); $\geq 50$ pairs $\times$ 4 task
+  types.
+\item Verbosity manipulated by \emph{padding} $r_1$ with redundant
+  but on-topic sentences (length only), not paraphrase expansion,
+  to unconfound length from rephrasing.
+\item All eight $(P,V,S)$ swap cells, $\geq 3$ samples/cell;
+  self-preference cells use a held-out generator, not the judge's
+  own output, to unconfound $S$ from length/style.
+\item Inference: wild-cluster-bootstrap CI (robust with few
+  clusters); Bonferroni over the three factor pairs.
+\end{itemize}
+The reported pilot is a small initial slice that omits the frontier
+judges, the padding manipulation, and the multiplicity control.
+
+IASC and \IAPPI\ were developed after the initial two-judge
+collection and are corrections evaluated \emph{post hoc} on the same
+frozen data---not part of the pre-registered analysis. We flag them
+as such throughout.
+
+\section{Proof of Proposition~\ref{prop:ssit}}
+\label{app:ssit}
+Under $\logit\pi_1(P,V)=\delta+\beta_P(2P{-}1)+\beta_V V
++\beta_{PV}(2P{-}1)V$:
+$\logit\pi_1(1,1)-\logit\pi_1(0,1)=2\beta_P+2\beta_{PV}$ and
+$\logit\pi_1(1,0)-\logit\pi_1(0,0)=2\beta_P$; their difference is
+$2\beta_{PV}$. Every term in $\delta$ and $\beta_V$ (which do not
+depend on $P$) cancels in the inner differences, and $\beta_P$
+cancels in the outer difference. \hfill$\square$
+
+\medskip
+\noindent\textbf{Proposition~\ref{prop:iasc} (IASC shrinkage).}
+The four cell log-odds identify $\beta_P$ (inner difference
+$=2\beta_P$) and $\beta_{PV}$ (DiD $=2\beta_{PV}$) free of
+$\delta,\beta_V$. The plug-in fits a \emph{single} slope pair across
+pairs whose $\delta_k$ vary; a pooled logistic slope under an
+omitted heterogeneous intercept attenuates,
+$\hat\beta_\bullet\xrightarrow{p}\lambda_\bullet\beta_\bullet$ with
+$\lambda_\bullet\in(0,1]$ and $\lambda_\bullet\to1$ as
+$\mathrm{Var}\,\delta\to0$ (mixed-logit / Jensen). Substituting into
+\eqref{eq:iasc},
+$\E[\logit\hat s_i\mid k]=\delta_k
++(1{-}\lambda_P)\beta_P(2P_i{-}1)+\beta_V V_i+\beta_S S_i
++(1{-}\lambda_{PV})\beta_{PV}(2P_i{-}1)V_i$: a positive fraction of
+each position-coupled term is removed, sign preserved.
+$\lambda_P$ and $\lambda_{PV}$ need not be equal, so a cell can
+retain oppositely-signed main-effect and interaction residuals; and
+the shrinkage guarantee is on the logit scale---after $\sigma$ the
+Jensen gap can push the corrected pick rate outside
+$[\text{raw},\text{swap-avg}]$. At $\lambda_P=\lambda_{PV}=1$
+(matched calibration pairs) IASC coincides with $2\times$
+swap-averaging in the log-odds. \hfill$\square$
+
+\section{Optional CI Companion: the Factorial Rectifier}
+\label{app:coverage}
+\label{app:iappi-est}
+\label{app:valid}
+
+This appendix is a companion, not a core contribution: it says how
+to attach a \emph{valid confidence interval} to a debiased win rate
+when a small gold set \emph{is} available. Reference implementation:
+\texttt{ia\_ppi.py}.
+
+Prediction-powered inference (PPI++~\cite{angelopoulos2024ppipp,
+eif_judge2026}) debiases a large judge-labelled set $\mathcal{E}$
+against a small gold set $\mathcal{C}$ using a rectifier
+$\mu(\hat y)=\E[H\mid\hat Y{=}\hat y]$.
+
+\begin{proposition}[Marginal PPI under-covers under cell shift]
+\label{prop:coverage}
+With $g(\hat y,c)=\E[H\mid\hat Y{=}\hat y,c]-\mu(\hat y)$ and
+$\pi_c,\pi_c'$ the cell frequencies in $\mathcal{C},\mathcal{E}$,
+$\hat\theta_{\mathrm{PPI}}$ has asymptotic bias
+$\sum_c(\pi_c'-\pi_c)\E[g\mid c]$ with
+$\E[g\mid c]=\tfrac14 s_c\beta_{PV}+O(\beta_{PV}^2)$; the coverage
+loss is order (bias$/$SE). The \emph{factorial} rectifier
+$\mu(\hat y,P,V,PV)$---fit on $\mathcal{C}$ or seeded from SSIT---sets
+$g\equiv0$; the resulting estimator is $\sqrt{\Ncal}$-asymptotically
+normal with a sandwich variance, and its point estimate equals the
+joint $P{+}V{+}PV$ plug-in. Proof: standard PPI augmentation with a
+cell-stratified rectifier (\texttt{ia\_ppi.py}, docstring).
+\end{proposition}
+
+\noindent \emph{Simulation} (\texttt{sim\_prop2\_coverage.py},
+$\Ncal{=}800$, $1{,}500$ reps, $\mathcal{E}$ on the joint-bias
+cell): marginal-PPI $95\%$ coverage falls to $\approx0.89$ as the
+interaction grows and to $0.82$ under a probit judge link; the
+factorial rectifier holds $0.94$--$0.95$ throughout, and also under
+three variants where its working model is wrong (probit link; an
+active three-way term; a quality-dependent position slope), so it is
+not merely recovering its own DGP. Below $\Ncal\approx500$ the
+factorial rectifier is too noisy and increases residual bias
+relative to sequential correction, so it needs a few hundred gold
+pairs to be worth using.
+
+\section{Pilot: Dropped Verdicts}
+\label{app:validation}
+$\approx$15\% of \texttt{gemma} responses, $\approx$9\% of
+\texttt{qwen3-27b}, and ${<}3\%$ of \texttt{gpt-oss} did not
+contain a parseable \texttt{VERDICT:} line and were dropped
+(\texttt{allam-2-7b}, \texttt{mistral-small}, \texttt{command-r}:
+$0\%$). The drop rate is mildly cell-correlated
+(highest in the expanded-$V$ cells, where \texttt{gemma} and
+\texttt{qwen3-27b} more often deliberate instead of committing),
+which could bias $\hat\imath_{PV}$; under the padding-only $V$
+\texttt{qwen3-27b}'s drop rate rises to $\approx$16\% (redundant
+restatement makes it more often call the two responses equivalent),
+a caveat on its null there. The wild
+cluster bootstrap in Table~\ref{tab:pilot} treats a pair with a
+missing cell as absent rather than imputing. The pre-registered
+protocol (Appendix~\ref{app:prereg}) fixes $\geq3$ samples/cell so a
+single unparseable draw does not empty a cell, and logs the raw
+generations for post-hoc coding.
+
+\section{IASC on the Pilot}
+\label{app:iasc-pilot}
+\begin{table}[htbp]
+\centering
+\caption{IASC on the pilot (\texttt{analyze\_iasc.py}). $\hat\beta_P,
+\hat\beta_{PV}$ are the gold-free swap-cell estimates (log-odds);
+``raw'' is the uncorrected target-pick rate on the single-order
+($P{=}1$) slice, ``$+$IASC'' the same slice after
+Eq.~\eqref{eq:iasc} (pair-cluster bootstrap 95\% CI, coefficients
+re-fit per resample), ``swap-avg.'' the full $2\times$
+swap-averaged rate. IASC and swap-averaging move the raw estimate
+the same direction; they differ by the logit-vs-probability Jensen
+gap.}
+\label{tab:iasc}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Judge & $\hat\beta_P$ & $\hat\beta_{PV}$ & raw & $+$IASC & swap-avg. \\
+\midrule
+\texttt{gpt-oss-20b}  & $-1.13$ & $+1.77$ & $0.96$ & $0.98\,[0.97,1.00]$ & $0.97$ \\
+\texttt{gpt-oss-120b} & $-1.48$ & $+1.48$ & $0.86$ & $0.94\,[0.92,0.98]$ & $0.93$ \\
+\texttt{gemma}        & $-1.58$ & $+1.43$ & $0.87$ & $0.94\,[0.92,0.98]$ & $0.89$ \\
+\texttt{qwen3-27b}    & $-1.53$ & $+2.27$ & $0.95$ & $0.99\,[0.98,0.99]$ & $0.97$ \\
+\texttt{allam-2-7b}   & $-1.60$ & $+0.77$ & $0.89$ & $0.97\,[0.96,0.98]$ & $0.93$ \\
+\texttt{mistral-small}& $-0.52$ & $+0.52$ & $0.94$ & $0.96\,[0.94,0.98]$ & $0.96$ \\
+\texttt{command-r}    & $\phantom{-}0.00$ & $\phantom{+}0.00$ & $1.00$ & $1.00$ & $1.00$ \\
+\midrule
+\textbf{Pooled} & $-1.36$ & $+1.28$ & $0.93$ & $\mathbf{0.98\,[0.97,0.99]}$ & $0.95$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{All Three Factor Pairs and Task Breakdown on the Pilot}
+\label{app:pairs}
+Gold-free SSIT applied to each factor pair
+(\texttt{analyze\_real.py}; probability-scale DiD $\hat\imath_{XY}$,
+pair-cluster bootstrap 95\% CI over $\approx$20 clusters,
+$B{=}3{,}000$). ``AIA rej.'' = the $\hat\imath_{XY}$ CI \emph{and}
+the log-odds $\hat b_{XY}$ CI both exclude 0 (nominal, \emph{not}
+multiplicity-corrected; three pairs $\times$ four groupings).
+
+\begin{center}\small
+\begin{tabular}{llcc}
+\toprule
+Judge & Pair & $\hat\imath_{XY}$ & AIA rej. \\
+\midrule
+Pooled ($7$) & $P{\times}V$ & $+0.10\ [+0.05,+0.14]$ & yes \\
+Pooled ($7$) & $P{\times}S$ & $+0.08\ [+0.03,+0.15]$ & no  \\
+Pooled ($7$) & $V{\times}S$ & $-0.06\ [-0.11,-0.00]$ & no  \\
+\midrule
+\texttt{gpt-oss-20b}  & $P{\times}V$ & $+0.12\ [+0.03,+0.23]$ & yes \\
+\texttt{gpt-oss-120b} & $P{\times}V$ & $+0.17\ [+0.06,+0.31]$ & yes \\
+\texttt{gemma}        & $P{\times}V$ & $+0.16\ [+0.08,+0.25]$ & yes \\
+\texttt{qwen3-27b}    & $P{\times}V$ & $+0.12\ [+0.05,+0.20]$ & yes \\
+\texttt{allam-2-7b}   & $P{\times}V$ & $+0.09\ [+0.00,+0.16]$ & no  \\
+\texttt{mistral-small}& $P{\times}V$ & $+0.07\ [+0.01,+0.16]$ & no  \\
+\texttt{command-r}    & $P{\times}V$ & $+0.00\ [+0.00,+0.00]$ & no  \\
+\midrule
+\texttt{gpt-oss-120b} & $V{\times}S$ & $-0.17\ [-0.31,-0.06]$ & yes \\
+\texttt{mistral-small}& $V{\times}S$ & $-0.12\ [-0.25,-0.03]$ & yes \\
+\texttt{qwen3-27b}    & $V{\times}S$ & $-0.09\ [-0.18,-0.00]$ & no  \\
+\texttt{allam-2-7b}   & $V{\times}S$ & $-0.09\ [-0.16,-0.01]$ & no  \\
+\texttt{gemma}        & $V{\times}S$ & $+0.11\ [-0.01,+0.24]$ & no  \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent $P{\times}V$ is positive on six of seven judges (all but
+\texttt{command-r}, which is not challenged by the stimulus), pooled
+$+0.10$ ($+0.12$ excluding \texttt{command-r}). $P{\times}S$ points
+the same way pooled but its $\hat\imath$ and log-odds CIs do not
+both clear 0, and the $S{=}1$ cells substitute the judge's own
+generation for $r_1$, so it is confounded with
+$P{\times}$(length/style)---we do not claim it. $V{\times}S$
+(outside the swap subspace) is negative for four judges, positive
+for one, weakly negative pooled ($-0.06$)---the selective pattern
+Prop.~\ref{prop:iasc} predicts, but on seven judges $\times$ 20 pairs
+it is suggestive, not established.
+
+\smallskip
+\noindent\textbf{By task} (pooled over seven judges,
+$\hat\imath_{PV}$): Math Reasoning $+0.23\ [+0.19,+0.28]$;
+Summarization $+0.06\ [+0.02,+0.09]$ (AIA rej.); Open-ended QA
+$+0.02\ [+0.00,+0.04]$; Code Review omitted (3 pairs). The
+interaction concentrates on Math Reasoning and never sign-reverses.
+
+\section{Leaderboard-Impact Sketch}
+\label{app:ranksweep}
+A \emph{constructed} demo (\texttt{sim\_ranking\_impact.py}): six
+models on a tight skill ladder, judge carrying
+$\hat\imath_{PV}={+}0.15$, verbosity aligned adversarially with
+rank. Real leaderboards randomise position, so the absolute
+$\tau$-drop is an artefact; the ordering of methods is the point.
+Sweeping $\beta_{PV}{=}{-}\beta_P$, Kendall $\tau$ to the true
+order: no correction and sequential correction stay broken
+($\tau{=}{+}0.20$) at every magnitude; log-odds swap-averaging and
+joint $P{+}V{+}PV$ estimation stay exact; label-free IASC ranges
+$\tau\in[{+}0.60,{+}0.87]$, degrading with the bias magnitude as
+$\lambda_{PV}$ falls. Details and the full table in the code.
+
+\end{document}

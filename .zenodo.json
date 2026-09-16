@@ -1,0 +1,42 @@
+{
+  "title": "Do LLM-Judge Biases Compose? Code, pilot data, and pre-registration for a label-free test of the position x verbosity interaction (SSIT / IASC)",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "version": "1.0.0",
+  "language": "eng",
+  "creators": [
+    {
+      "name": "Varughese, Johan S"
+    }
+  ],
+  "description": "<p>Reference implementation, gold-free real-judge pilot data, and frozen analysis pipeline for the paper <em>Do LLM-Judge Biases Compose? A Label-Free Test for the Position x Verbosity Interaction</em>.</p><p>LLM-as-a-judge pipelines correct position, verbosity and self-preference bias <em>sequentially</em>, assuming the biases add. This artifact accompanies: (1) a proposition that if position and verbosity bias interact, fitting the corrections marginally leaves a residual of &frac12;|&beta;_PV|; (2) SSIT, a label-free difference-in-differences over the four position&times;verbosity swap cells that identifies &beta;_PV, with a simulation characterising when its identifying assumption holds; (3) IASC, a partial label-free correction of the position-coupled bias subspace; and (4) a 7-judge / 6-family pilot plus a pre-registered protocol.</p><p><strong>Contents</strong></p><ul><li><code>ssit.py</code> &mdash; Swap-Symmetry Interaction Test.</li><li><code>sim_ssit_robustness.py</code> &mdash; SSIT's readout vs. the judge's true population interaction across six decision rules, including a linkless threshold judge (bias &le; 0.004, gold-free).</li><li><code>sim_ssit_power.py</code> &mdash; power of the SSIT wild-cluster test vs. number of pairs, samples/cell, and judge decisiveness; <code>analyze_real.py</code> also reports a design-based realized power per judge.</li><li><code>iasc.py</code> &mdash; Interaction-Aware Swap Correction (partial, label-free; under-corrects by a data-dependent amount).</li><li><code>ia_ppi.py</code> &mdash; a valid-CI variant via post-stratified prediction-powered inference.</li><li><code>sim_prop2_coverage.py</code> &mdash; PPI coverage under cell-composition shift. <code>sim_ranking_impact.py</code> &mdash; downstream cost: leaderboard Kendall-tau recovery and an RLHF preference-label-flip upper bound from an uncorrected interaction.</li><li><code>analyze_real.py</code>, <code>analyze_iasc.py</code>, <code>analyze_iappi.py</code> &mdash; frozen analysis of the pilot data.</li><li><code>collect_free.py</code> &mdash; multi-provider free-tier judgment collector (13 model families).</li><li><code>data/raw/</code> &mdash; pilot judgments from seven judges (gpt-oss-20b/120b, gemma, qwen3-27b, allam-2-7b, mistral-small, command-r) across all eight (P,V,S) swap cells; <code>data/raw_padded/</code> + <code>make_padded_v.py</code> &mdash; a length-only (padding, not paraphrase) verbosity re-test for four judges (mistral-small, command-r, qwen3-27b, allam-2-7b).</li><li><code>paper_neurips_workshop.pdf</code>, <code>paper_neurips_workshop.tex</code> &mdash; the manuscript.</li></ul><p>Dependencies: <code>numpy</code>, <code>scipy</code> (<code>requests</code> for the collector; others only for the legacy figure pipeline). Seed 2024 throughout.</p>",
+  "keywords": [
+    "LLM-as-a-judge",
+    "automatic evaluation",
+    "position bias",
+    "verbosity bias",
+    "self-preference bias",
+    "bias interaction",
+    "prediction-powered inference",
+    "difference-in-differences",
+    "leaderboard evaluation",
+    "AlpacaEval",
+    "RLHF",
+    "natural language processing",
+    "reproducibility"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/jo-sh-varughese/Toward-Interaction-Aware-Bias-Correction-in-LLM-as-a-Judge-Evaluation",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://osf.io/OSFID",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-preprint"
+    }
+  ],
+  "notes": "Accompanies a submission to the Workshop on the Evaluation of LLMs as Judges (JUDGe) at NeurIPS 2026 (non-archival). An earlier version was reviewed at ICMLA 2025 (not published). Non-simulation results are Propositions 1-5 and the pilot's interaction pattern (i_PV, and the P x V / P x S vs. V x S split); all other quantitative magnitudes are simulation-based."
+}

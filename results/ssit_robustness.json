@@ -1,0 +1,90 @@
+{
+  "n_pairs": 60,
+  "reps": 300,
+  "rows": [
+    {
+      "dgp": "logit",
+      "true_iPV": 0.244,
+      "iPV_mean": 0.241,
+      "iPV_sd": 0.078,
+      "iPV_bias": -0.004,
+      "bPV_mean": 0.499,
+      "bPV_sd": 0.246,
+      "frac_iPV_pos": 1.0,
+      "rep_ci": [
+        0.067,
+        0.404
+      ]
+    },
+    {
+      "dgp": "het-delta",
+      "true_iPV": 0.204,
+      "iPV_mean": 0.201,
+      "iPV_sd": 0.072,
+      "iPV_bias": -0.003,
+      "bPV_mean": 0.408,
+      "bPV_sd": 0.217,
+      "frac_iPV_pos": 0.997,
+      "rep_ci": [
+        0.058,
+        0.358
+      ]
+    },
+    {
+      "dgp": "qdep-sym",
+      "true_iPV": 0.218,
+      "iPV_mean": 0.218,
+      "iPV_sd": 0.083,
+      "iPV_bias": 0.001,
+      "bPV_mean": 0.444,
+      "bPV_sd": 0.245,
+      "frac_iPV_pos": 0.997,
+      "rep_ci": [
+        0.1,
+        0.421
+      ]
+    },
+    {
+      "dgp": "qdep-asym",
+      "true_iPV": 0.16,
+      "iPV_mean": 0.159,
+      "iPV_sd": 0.078,
+      "iPV_bias": -0.001,
+      "bPV_mean": 0.331,
+      "bPV_sd": 0.245,
+      "frac_iPV_pos": 0.977,
+      "rep_ci": [
+        -0.033,
+        0.308
+      ]
+    },
+    {
+      "dgp": "probit",
+      "true_iPV": 0.331,
+      "iPV_mean": 0.329,
+      "iPV_sd": 0.07,
+      "iPV_bias": -0.002,
+      "bPV_mean": 0.677,
+      "bPV_sd": 0.215,
+      "frac_iPV_pos": 1.0,
+      "rep_ci": [
+        0.183,
+        0.483
+      ]
+    },
+    {
+      "dgp": "rule",
+      "true_iPV": 0.234,
+      "iPV_mean": 0.23,
+      "iPV_sd": 0.075,
+      "iPV_bias": -0.004,
+      "bPV_mean": 0.468,
+      "bPV_sd": 0.229,
+      "frac_iPV_pos": 0.993,
+      "rep_ci": [
+        0.192,
+        0.492
+      ]
+    }
+  ]
+}

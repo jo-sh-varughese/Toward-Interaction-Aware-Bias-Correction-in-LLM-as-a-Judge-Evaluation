@@ -1,0 +1,153 @@
+{
+  "true_order": [
+    "m6",
+    "m5",
+    "m4",
+    "m3",
+    "m2",
+    "m1"
+  ],
+  "coeffs": {
+    "bP_m": -0.29,
+    "bP_j": -0.588,
+    "bPV_j": 0.577,
+    "bP_ss": -0.536,
+    "bPV_ss": 0.564
+  },
+  "oracle": {
+    "b_P": -0.6,
+    "b_PV": 0.6
+  },
+  "methods": {
+    "none": {
+      "order": [
+        "m5",
+        "m3",
+        "m1",
+        "m6",
+        "m4",
+        "m2"
+      ],
+      "tau": 0.2,
+      "inversions": [
+        "m1>m6"
+      ]
+    },
+    "SC": {
+      "order": [
+        "m5",
+        "m3",
+        "m1",
+        "m6",
+        "m4",
+        "m2"
+      ],
+      "tau": 0.2,
+      "inversions": [
+        "m1>m6"
+      ]
+    },
+    "swap": {
+      "order": [
+        "m6",
+        "m5",
+        "m4",
+        "m3",
+        "m2",
+        "m1"
+      ],
+      "tau": 1.0,
+      "inversions": []
+    },
+    "JBC": {
+      "order": [
+        "m6",
+        "m5",
+        "m4",
+        "m3",
+        "m2",
+        "m1"
+      ],
+      "tau": 1.0,
+      "inversions": []
+    },
+    "IASC": {
+      "order": [
+        "m6",
+        "m5",
+        "m3",
+        "m4",
+        "m2",
+        "m1"
+      ],
+      "tau": 0.867,
+      "inversions": [
+        "m3>m4"
+      ]
+    }
+  },
+  "robustness_sweep": [
+    {
+      "b_P": -0.4,
+      "b_PV": 0.4,
+      "tau": {
+        "none": 0.2,
+        "SC": 0.2,
+        "swap": 1.0,
+        "JBC": 1.0,
+        "IASC": 0.867
+      }
+    },
+    {
+      "b_P": -0.6,
+      "b_PV": 0.6,
+      "tau": {
+        "none": 0.2,
+        "SC": 0.2,
+        "swap": 1.0,
+        "JBC": 1.0,
+        "IASC": 0.867
+      }
+    },
+    {
+      "b_P": -1.0,
+      "b_PV": 1.0,
+      "tau": {
+        "none": 0.2,
+        "SC": 0.2,
+        "swap": 1.0,
+        "JBC": 1.0,
+        "IASC": 0.6
+      }
+    },
+    {
+      "b_P": -1.5,
+      "b_PV": 1.5,
+      "tau": {
+        "none": 0.2,
+        "SC": 0.2,
+        "swap": 0.867,
+        "JBC": 1.0,
+        "IASC": 0.6
+      }
+    }
+  ],
+  "rlhf_label_flip_frac_on_affected_cell": {
+    "0.05": {
+      "decisive": 0.088,
+      "ambiguous": 0.151
+    },
+    "0.1": {
+      "decisive": 0.174,
+      "ambiguous": 0.294
+    },
+    "0.15": {
+      "decisive": 0.263,
+      "ambiguous": 0.436
+    },
+    "0.2": {
+      "decisive": 0.352,
+      "ambiguous": 0.568
+    }
+  }
+}

@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this software or data, please cite both the software (this record) and the accompanying paper."
+title: "Interaction-Aware Bias Correction for LLM-as-a-Judge Evaluation: BIC, SSIT, IASC and IA-PPI"
+version: 1.0.0
+date-released: 2026-08-28
+license: MIT
+type: software
+authors:
+  - family-names: Varughese
+    given-names: Johan S
+    email: mail2joshvarkey@gmail.com
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+    # affiliation: ""
+repository-code: "https://github.com/jo-sh-varughese/Toward-Interaction-Aware-Bias-Correction-in-LLM-as-a-Judge-Evaluation"
+# doi: "10.5281/zenodo.XXXXXXX"   # fill in the concept DOI once reserved
+keywords:
+  - LLM-as-a-judge
+  - position bias
+  - verbosity bias
+  - bias interaction
+  - prediction-powered inference
+  - leaderboard evaluation
+abstract: >-
+  Reference implementation, gold-free real-judge pilot data, and frozen
+  analysis pipeline for the paper "Toward Interaction-Aware Bias Correction
+  in LLM-as-a-Judge Evaluation: The Bias Interaction Coefficient and
+  Interaction-Aware Prediction-Powered Inference". Includes the
+  Swap-Symmetry Interaction Test (SSIT), Interaction-Aware Swap Correction
+  (IASC), Interaction-Aware Prediction-Powered Inference (IA-PPI), the
+  coverage and leaderboard-impact simulations, and a multi-provider
+  free-tier judgment collector.
+preferred-citation:
+  type: conference-paper
+  title: >-
+    Do LLM-Judge Biases Compose? A Label-Free Test for the
+    Position x Verbosity Interaction
+  authors:
+    - family-names: Varughese
+      given-names: Johan S
+      email: mail2joshvarkey@gmail.com
+  year: 2026
+  collection-title: >-
+    Workshop on the Evaluation of LLMs as Judges (JUDGe), NeurIPS 2026
