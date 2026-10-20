@@ -9,7 +9,7 @@ authors:
   - family-names: Varughese
     given-names: Johan S
     email: mail2joshvarkey@gmail.com
-    # orcid: "https://orcid.org/0000-0000-0000-0000"
+    orcid: "https://orcid.org/0009-0008-7393-6228"
     # affiliation: ""
 repository-code: "https://github.com/jo-sh-varughese/Toward-Interaction-Aware-Bias-Correction-in-LLM-as-a-Judge-Evaluation"
 # doi: "10.5281/zenodo.XXXXXXX"   # fill in the concept DOI once reserved
@@ -37,5 +37,6 @@ preferred-citation:
     - family-names: Varughese
       given-names: Johan S
       email: mail2joshvarkey@gmail.com
+      orcid: "https://orcid.org/0009-0008-7393-6228"
   year: 2026
   notes: Manuscript prepared for Transactions on Machine Learning Research.
