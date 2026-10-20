@@ -1,29 +1,28 @@
 {
-  "title": "Do LLM-Judge Biases Compose? Code, pilot data, and pre-registration for a label-free test of the position x verbosity interaction (SSIT / IASC)",
+  "title": "Do LLM-Judge Biases Compose? Code and data for a label-free, scale-aware test of position-length interaction",
   "upload_type": "software",
   "access_right": "open",
   "license": "MIT",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "language": "eng",
   "creators": [
     {
       "name": "Varughese, Johan S"
     }
   ],
-  "description": "<p>Reference implementation, gold-free real-judge pilot data, and frozen analysis pipeline for the paper <em>Do LLM-Judge Biases Compose? A Label-Free Test for the Position x Verbosity Interaction</em>.</p><p>LLM-as-a-judge pipelines correct position, verbosity and self-preference bias <em>sequentially</em>, assuming the biases add. This artifact accompanies: (1) a proposition that if position and verbosity bias interact, fitting the corrections marginally leaves a residual of &frac12;|&beta;_PV|; (2) SSIT, a label-free difference-in-differences over the four position&times;verbosity swap cells that identifies &beta;_PV, with a simulation characterising when its identifying assumption holds; (3) IASC, a partial label-free correction of the position-coupled bias subspace; and (4) a 7-judge / 6-family pilot plus a pre-registered protocol.</p><p><strong>Contents</strong></p><ul><li><code>ssit.py</code> &mdash; Swap-Symmetry Interaction Test.</li><li><code>sim_ssit_robustness.py</code> &mdash; SSIT's readout vs. the judge's true population interaction across six decision rules, including a linkless threshold judge (bias &le; 0.004, gold-free).</li><li><code>sim_ssit_power.py</code> &mdash; power of the SSIT wild-cluster test vs. number of pairs, samples/cell, and judge decisiveness; <code>analyze_real.py</code> also reports a design-based realized power per judge.</li><li><code>iasc.py</code> &mdash; Interaction-Aware Swap Correction (partial, label-free; under-corrects by a data-dependent amount).</li><li><code>ia_ppi.py</code> &mdash; a valid-CI variant via post-stratified prediction-powered inference.</li><li><code>sim_prop2_coverage.py</code> &mdash; PPI coverage under cell-composition shift. <code>sim_ranking_impact.py</code> &mdash; downstream cost: leaderboard Kendall-tau recovery and an RLHF preference-label-flip upper bound from an uncorrected interaction.</li><li><code>analyze_real.py</code>, <code>analyze_iasc.py</code>, <code>analyze_iappi.py</code> &mdash; frozen analysis of the pilot data.</li><li><code>collect_free.py</code> &mdash; multi-provider free-tier judgment collector (13 model families).</li><li><code>data/raw/</code> &mdash; pilot judgments from seven judges (gpt-oss-20b/120b, gemma, qwen3-27b, allam-2-7b, mistral-small, command-r) across all eight (P,V,S) swap cells; <code>data/raw_padded/</code> + <code>make_padded_v.py</code> &mdash; a length-only (padding, not paraphrase) verbosity re-test for four judges (mistral-small, command-r, qwen3-27b, allam-2-7b).</li><li><code>paper_neurips_workshop.pdf</code>, <code>paper_neurips_workshop.tex</code> &mdash; the manuscript.</li></ul><p>Dependencies: <code>numpy</code>, <code>scipy</code> (<code>requests</code> for the collector; others only for the legacy figure pipeline). Seed 2024 throughout.</p>",
+  "description": "<p>Code, judgment data, and analysis pipeline for the manuscript <em>Do LLM-Judge Biases Compose? A Label-Free, Scale-Aware Test for Position&ndash;Length Interaction</em>.</p><p>Pipelines that use LLMs as pairwise judges correct position and length bias in separate steps, assuming the two add. The manuscript proves that on the win-rate scale any correction applying one position offset across length conditions misstates the verbose-versus-terse contrast by exactly half the position&times;length interaction, while swap-averaging and stratified correction are exact. It introduces the Swap-Symmetry Interaction Test (SSIT), a design-based difference-in-differences over the four swap cells of each stimulus that needs no labels, and identifies two artefacts that can manufacture the effect: coding ties as votes for a slot, and link curvature near the ceiling. On seven judges from six model families, with swap-equivariant tie coding and inference clustered on 12 distinct stimuli, no judge is individually significant; the pooled interaction is +4.7 win-rate points (95% CI [1.6, 7.8]) and exceeds its curvature baseline.</p><p><strong>Contents</strong></p><ul><li><code>tmlr/</code> &mdash; manuscript source, PDF, bibliography and figure.</li><li><code>analyze_tmlr.py</code> &mdash; pilot analysis under three tie codings, stimulus-clustered sign-flip tests, curvature baselines, log-odds interaction and IASC; writes <code>results/tmlr_pilot.json</code>.</li><li><code>make_tmlr_figures.py</code> &mdash; Figure 1.</li><li><code>ssit.py</code>, <code>iasc.py</code> &mdash; reference implementations of the test and of Interaction-Aware Swap Correction.</li><li><code>sim_ssit_robustness.py</code>, <code>sim_ssit_power.py</code> &mdash; simulations behind the manuscript's Tables 1&ndash;2.</li><li><code>collect_free.py</code>, <code>make_stimulus_pairs.py</code>, <code>make_padded_v.py</code> &mdash; judgment collector, stimulus set, and length-only manipulation.</li><li><code>data/raw/</code>, <code>data/raw_padded/</code> &mdash; all parsed verdicts from seven judges (gpt-oss-20b/120b, gemma, qwen3-27b, allam-2-7b, mistral-small, command-r) under paraphrase and padding manipulations.</li><li>Earlier workshop and conference drafts are retained for the record; their per-judge results are superseded (see README).</li></ul><p>Dependencies: <code>numpy</code>, <code>scipy</code>, <code>matplotlib</code> (<code>requests</code> for the collector). Seed 2024 throughout.</p>",
   "keywords": [
     "LLM-as-a-judge",
     "automatic evaluation",
     "position bias",
+    "length bias",
     "verbosity bias",
-    "self-preference bias",
     "bias interaction",
-    "prediction-powered inference",
     "difference-in-differences",
+    "randomization inference",
+    "paired comparison",
     "leaderboard evaluation",
-    "AlpacaEval",
     "RLHF",
-    "natural language processing",
     "reproducibility"
   ],
   "related_identifiers": [
@@ -31,12 +30,7 @@
       "identifier": "https://github.com/jo-sh-varughese/Toward-Interaction-Aware-Bias-Correction-in-LLM-as-a-Judge-Evaluation",
       "relation": "isSupplementTo",
       "resource_type": "software"
-    },
-    {
-      "identifier": "https://osf.io/OSFID",
-      "relation": "isDocumentedBy",
-      "resource_type": "publication-preprint"
     }
   ],
-  "notes": "Accompanies a submission to the Workshop on the Evaluation of LLMs as Judges (JUDGe) at NeurIPS 2026 (non-archival). An earlier version was reviewed at ICMLA 2025 (not published). Non-simulation results are Propositions 1-5 and the pilot's interaction pattern (i_PV, and the P x V / P x S vs. V x S split); all other quantitative magnitudes are simulation-based."
+  "notes": "Accompanies a manuscript prepared for Transactions on Machine Learning Research. An earlier version was a non-archival submission to the NeurIPS 2026 Workshop on the Evaluation of LLMs as Judges (JUDGe); its per-judge results are superseded by the corrected analysis in this release."
 }

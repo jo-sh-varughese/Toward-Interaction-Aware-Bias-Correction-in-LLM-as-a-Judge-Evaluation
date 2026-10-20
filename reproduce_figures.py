@@ -14,8 +14,8 @@ from pathlib import Path
 from itertools import combinations
 
 warnings.filterwarnings("ignore")
-FIGS = Path("/home/claude/v4/figures")
-DATA = Path("/home/claude/v4/data")
+FIGS = Path(__file__).resolve().parent / "figures"
+DATA = Path(__file__).resolve().parent / "data" / "legacy_sim"
 FIGS.mkdir(parents=True, exist_ok=True); DATA.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update({"font.family":"DejaVu Serif","font.size":11,
