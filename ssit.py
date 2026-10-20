@@ -5,8 +5,15 @@ A GOLD-LABEL-FREE estimator of the judge-bias coefficients and a direct
 test of the additive-independence assumption (AIA), from the 2x2x2
 factorial-swap design used by collect_free.py.
 
+Design note.  The full factorial supports 8 cells over (P,V,S), where S is
+self-preference.  The paper's primary estimand is the 4-cell (P,V)
+interaction i_PV of Propositions 2-3: the estimator `_iPV_prob` averages
+over S (S is balanced across cells), recovering the 4-cell contrast
+[r(1,1)-r(0,1)] - [r(1,0)-r(0,0)].  The 8-cell saturated fit below is a
+secondary, log-odds readout and the route to the P x S and V x S pairs.
+
 Key idea.  Present every pair in all 8 (P,V,S) cells.  With
-    picked_r1 = Y_bin if P==1 else 1 - Y_bin,
+    picked_r1 = y if P==1 else 1 - y,   y = Y_star (A=1, tie=1/2, B=0),
     q_c = mean over pairs of picked_r1 in cell c,
 model the pooled log-odds of picking the target response r1 as
 
@@ -73,12 +80,22 @@ def _bics(b, eps):
     return d
 
 
+def _verdict(r):
+    """Judge-side outcome in [0, 1]: 1 = Response A, 1/2 = tie, 0 = Response B.
+
+    Prefers `Y_star` (ties scored 1/2), which is swap-equivariant.  `Y_bin`
+    maps a tie to slot B and is NOT: it adds the fall in tie rate under
+    lengthening to the interaction (Proposition 3 of the paper).  Records
+    without `Y_star` (simulations, which never tie) fall back to `Y_bin`."""
+    y = r.get("Y_star")
+    return r["Y_bin"] if y is None else y
+
+
 def _arrays(recs):
-    return (np.array([r["P"] for r in recs]), np.array([r["V"] for r in recs]),
-            np.array([r["S"] for r in recs]),
-            np.where(np.array([r["P"] for r in recs]) == 1,
-                     np.array([r["Y_bin"] for r in recs]),
-                     1 - np.array([r["Y_bin"] for r in recs])).astype(float),
+    P = np.array([r["P"] for r in recs])
+    y = np.array([_verdict(r) for r in recs], float)
+    return (P, np.array([r["V"] for r in recs]), np.array([r["S"] for r in recs]),
+            np.where(P == 1, y, 1 - y).astype(float),
             np.array([r["pair_id"] for r in recs]))
 
 

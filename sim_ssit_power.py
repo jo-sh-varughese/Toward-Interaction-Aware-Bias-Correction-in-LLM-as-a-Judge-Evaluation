@@ -135,8 +135,8 @@ def main():
                                    "analytic": round(a, 3), "sim": round(s_pw, 3)}
                 print(f"  {sd_d:>6.3f}{t:>7.2f}{n:>6}{a:>11.2f}{s_pw:>7.2f}")
     res["analytic_vs_sim"] = ana
-    n80 = lambda sd, i: 7.8 * sd * sd / (i * i)
-    print(f"\n  n for 80% power (7.8 * sd_d^2 / i_PV^2):")
+    n80 = lambda sd, i: 7.85 * sd * sd / (i * i)
+    print(f"\n  n for 80% power (7.85 * sd_d^2 / i_PV^2):")
     for sd in (0.20, 0.25, 0.30, 0.40):
         print(f"    sd_d={sd}: i=0.10 -> {n80(sd,0.10):.0f},  "
               f"i=0.15 -> {n80(sd,0.15):.0f},  i=0.20 -> {n80(sd,0.20):.0f}")

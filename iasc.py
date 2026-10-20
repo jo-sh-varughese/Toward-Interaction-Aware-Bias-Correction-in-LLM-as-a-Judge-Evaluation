@@ -46,7 +46,7 @@ numpy only.  Reuses the saturated-cell solver from ssit.py.
 """
 from __future__ import annotations
 import numpy as np
-from ssit import _coef, _arrays, CELLS
+from ssit import _coef, _arrays, _verdict, CELLS
 
 _SIG = lambda x: 1.0 / (1.0 + np.exp(-x))
 _CLIP = 1e-4
@@ -117,8 +117,8 @@ def iasc_winrate(recs_eval, fit, single_order_P=1, samples_key="sample",
 
     def _wr(rs, ft):
         pid = sorted({r["pair_id"] for r in rs})
-        y = np.array([np.mean([r["Y_bin"] for r in rs if r["pair_id"] == p]) for p in pid])
-        # pick-target rate: Y_bin is pick-A; at P=1 target r1 is in A
+        y = np.array([np.mean([_verdict(r) for r in rs if r["pair_id"] == p]) for p in pid])
+        # pick-target rate: the verdict is pick-A (ties 1/2); at P=1 target r1 is in A
         yt = y if single_order_P == 1 else 1 - y
         Pv = np.full(len(pid), single_order_P)
         Vv = np.array([next(r["V"] for r in rs if r["pair_id"] == p) for p in pid])
