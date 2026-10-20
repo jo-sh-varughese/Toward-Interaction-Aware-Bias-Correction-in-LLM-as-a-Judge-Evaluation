@@ -6,7 +6,7 @@ so the panels render identically on GitHub in either theme.  Numbers are
 read from results/tmlr_pilot.json (run analyze_tmlr.py first).
 
     pip install fonttools brotli matplotlib   # fonts are fetched on first run
-    python assets/make_readme_assets.py
+    python assets/make_readme_assets.py   # writes one self-contained SVG per panel
 """
 from __future__ import annotations
 import base64, io, json, urllib.request
@@ -23,9 +23,9 @@ W = 1000
 
 THEMES = {
     "light": dict(ink="#23224A", acc="#7A3D12", mut="#66648C", rule="#CBC9DD",
-                  blue="#2F5D9E", fill="#F3F2F8"),
+                  blue="#2F5D9E", fill="#F3F2F8", paper="#FBFAF6"),
     "dark": dict(ink="#E7E6F6", acc="#D9975E", mut="#A3A1C6", rule="#4A4870",
-                 blue="#8FB0E8", fill="#2A2944"),
+                 blue="#8FB0E8", fill="#2A2944", paper="#1B1A33"),
 }
 
 
@@ -140,9 +140,14 @@ class Panel:
             css.append(f"@font-face{{font-family:'X{k}';src:url(data:font/woff2;base64,{b64}) "
                        f"format('woff2');}}\n.{k}{{font-family:'X{k}','STIX Two Text',Georgia,serif;"
                        f"font-feature-settings:'kern','liga','lnum','pnum';}}")
-        out = [f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {W} {self.h}" '
-               f'width="{W}" height="{self.h}" role="img"><title>{esc(self.title)}</title>'
-               f'<defs><style>{chr(10).join(css)}</style></defs>']
+        PADX, PADY = 16, 12
+        out = [f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+               f'viewBox="0 0 {W + 2 * PADX} {self.h + 2 * PADY}" '
+               f'width="{W + 2 * PADX}" height="{self.h + 2 * PADY}" role="img"><title>{esc(self.title)}</title>'
+               f'<defs><style>{chr(10).join(css)}</style></defs>'
+               f'<rect x="0.5" y="0.5" width="{W + 2 * PADX - 1}" height="{self.h + 2 * PADY - 1}" rx="6" '
+               f'fill="{c["paper"]}" stroke="{c["rule"]}" stroke-width="1"/>'
+               f'<g transform="translate({PADX},{PADY})">']
         for it in self.items:
             if it[0] == "t":
                 _, x, y, s, cls, size, col, anchor, extra = it
@@ -162,12 +167,13 @@ class Panel:
                 for k, v in c.items():
                     s = s.replace("{" + k + "}", v)
                 out.append(s)
-        out.append("</svg>")
+        out.append("</g></svg>")
         return "\n".join(out)
 
     def save(self, name):
-        for th in THEMES:
-            (OUT / f"{name}-{th}.svg").write_text(self.render(th), encoding="utf-8")
+        # One self-contained panel on its own paper background: readable on
+        # both GitHub themes, so no theme detection is needed.
+        (OUT / f"{name}.svg").write_text(self.render("light"), encoding="utf-8")
 
 
 def head(p, label, right, y=34):
@@ -397,7 +403,7 @@ def figure():
             "mistral-small", "cohere-command-r", "Pooled"]
     lab = dict(zip(rows, ["gpt-oss-20b", "gpt-oss-120b", "gemma", "qwen3-27b",
                           "allam-2-7b", "mistral-small", "command-r", "Pooled, 7 judges"]))
-    for th, c in THEMES.items():
+    for th, c in [("light", THEMES["light"])]:
         plt.rcParams.update({"font.family": fam, "font.size": 13, "svg.fonttype": "path"})
         fig, ax = plt.subplots(figsize=(10, 4.6))
         fig.patch.set_alpha(0)
@@ -441,7 +447,7 @@ def figure():
         (OUT / f"_fig-{th}.svg").write_text(body, encoding="utf-8")
     # wrap with a caption panel
     import re
-    for th in THEMES:
+    for th in ("light",):
         body = (OUT / f"_fig-{th}.svg").read_text(encoding="utf-8")
         inner = re.sub(r"^<svg[^>]*>", "", body).rsplit("</svg>", 1)[0]
         inner = re.sub(r"<metadata>.*?</metadata>", "", inner, flags=re.S)
@@ -457,7 +463,7 @@ def figure():
                    "Ticks mark the interaction an additive log-odds judge would show "
                    "through curvature alone.", 988, "i", 15, 21, "mut")
         p.h = int(y + 4)
-        (OUT / f"figure-{th}.svg").write_text(p.render(th), encoding="utf-8")
+        (OUT / "figure.svg").write_text(p.render(th), encoding="utf-8")
         (OUT / f"_fig-{th}.svg").unlink()
 
 
