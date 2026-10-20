@@ -63,7 +63,6 @@ def main():
     fig.tight_layout()
     Path("tmlr/figures").mkdir(parents=True, exist_ok=True)
     fig.savefig("tmlr/figures/fig_forest.pdf")
-    fig.savefig("tmlr/figures/fig_forest.png", dpi=200)
 
 
 if __name__ == "__main__":

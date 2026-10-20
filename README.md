@@ -40,8 +40,8 @@
 ### Reproducing the paper
 
 Every pilot number, Table 3, Figure 1 and Appendices A–C come from the released
-judgment files. Nothing is re-queried. The scripts need NumPy and Matplotlib and
-take about five minutes on a laptop CPU.
+judgment files. Nothing is re-queried. The scripts need only NumPy and
+Matplotlib and take about five minutes on a laptop CPU.
 
 ```bash
 pip install -r requirements.txt
@@ -70,11 +70,10 @@ pilot, it asks for 30–50 distinct stimuli per judge for 80% power.
 | `data/raw/`, `data/raw_padded/` | Every parsed verdict from the seven judges (paraphrase and padding manipulations) |
 | `results/tmlr_pilot.json` | All numbers reported in the paper |
 | `assets/` | README panels; `make_readme_assets.py` regenerates them from the results |
-| `paper_neurips_workshop.*`, `paper_zenodo.*`, `paper_icmla_v4_archived.tex`, `figures/`, `reproduce_figures.py`, `analyze_real.py`, `analyze_iasc.py` | Earlier versions, kept for the record and superseded (see below) |
 
 ### A correction to the earlier version
 
-The NeurIPS 2026 JUDGe workshop draft in this repository (`paper_neurips_workshop.pdf`)
+The NeurIPS 2026 JUDGe workshop draft ([PDF at its last commit](https://github.com/jo-sh-varughese/Toward-Interaction-Aware-Bias-Correction-in-LLM-as-a-Judge-Evaluation/blob/24dc6c6/paper_neurips_workshop.pdf))
 reported a position×verbosity interaction on six of seven judges. Two errors in
 that analysis inflated it. First, ties were counted as votes for slot B, which
 breaks the swap symmetry the test relies on (Proposition 3). Second, inference
@@ -84,9 +83,11 @@ where it does not hold because of non-collapsibility; the TMLR manuscript
 restates it exactly on the win-rate scale. Once both errors are corrected, no
 judge is individually significant and the pooled interaction is +4.7 points,
 not the +10 reported there. `analyze_tmlr.py` reports the original coding next to the
-corrected one, so the difference can be checked directly. `analyze_iasc.py`
-also applies a single length condition's correction to rates averaged over both
-conditions; `analyze_tmlr.py` contains the corrected computation.
+corrected one, so the difference can be checked directly. The earlier IASC
+pilot analysis also applied one length condition's correction to rates averaged
+over both conditions; `analyze_tmlr.py` contains the corrected computation.
+Earlier drafts and their code were removed from the working tree and remain in
+the git history.
 
 ### Citation
 
